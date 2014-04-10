@@ -158,7 +158,7 @@ static void printResults(u_int64_t tot_usec)
            (long long unsigned int)raw_packet_count);
     printf("\tIP bytes:     \x1b[34m%-13llu\x1b[0m (avg pkt size %u bytes)\n",
            (long long unsigned int)total_bytes,
-           (unsigned int)(total_bytes/raw_packet_count));
+           (unsigned int)(total_bytes/ip_packet_count));
     printf("\tUnique flows: \x1b[36m%-13u\x1b[0m\n", ndpi_flow_count);
   }
 
@@ -387,10 +387,10 @@ static int processing()
    u_int64_t time;
    static u_int64_t lasttime=0;
    unsigned char payload[1024*1024];
-   while(1)
+   while(counta<40)
    {
      counta++;
-		 printf("1\n");
+//		 printf("1\n");
      status = ipq_read(h, buf, sizeof(buf),0);
      if(status==0||status==-1)continue;
      memset(payload, 0x00, sizeof(payload));
@@ -401,7 +401,7 @@ static int processing()
        ip_len=ipq_packet->data_len;
        time = ((uint64_t) ipq_packet->timestamp_sec) * detection_tick_resolution +ipq_packet->timestamp_usec / (1000000 / detection_tick_resolution);
 			 memcpy(payload + ETH_HDRLEN, ipq_packet->payload, ip_len);
- 			printf("2\n");
+// 			printf("2\n");
  			 if(lasttime > time) {
         time = lasttime;
        }
@@ -417,7 +417,7 @@ static int processing()
          flow->packets++, flow->bytes += ip_len;
        } else
          continue;
-			 printf("3\n");
+//			 printf("3\n");
        ip_packet_count++;
        total_bytes+=ip_len+24;
        if(flow->detection_completed) 
@@ -426,7 +426,7 @@ static int processing()
 				 continue;
 			 }
        protocol = (const u_int32_t)ndpi_detection_process_packet(ndpi_struct, ndpi_flow,iph,ip_len, time, src, dst);
-			 printf("4\n");
+//			 printf("4\n");
 			 flow->detected_protocol = protocol;
        if((flow->detected_protocol != NDPI_PROTOCOL_UNKNOWN)
            || ((proto == IPPROTO_UDP) && (flow->packets > 8))
@@ -445,7 +445,7 @@ static int processing()
          }
 可以设置verbose参数，如果满足，就输出流     printFlow(flow);*/
        }
-			 printf("5");
+//			 printf("5");
 			 ipq_set_verdict(h, ipq_packet->packet_id, NF_ACCEPT,ipq_packet->data_len,payload + ETH_HDRLEN);
        snprintf(flow->host_server_name, sizeof(flow->host_server_name), "%s", flow->ndpi_flow->host_server_name);
 	    }

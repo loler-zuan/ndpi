@@ -141,6 +141,7 @@ static void printResults(u_int64_t tot_usec)
   } else {
     printf("\x1b[2K\n");
   }
+  printf("pcap file contains\n");
   if (m) {
     printf("\tIP packets:   %-13llu of %llu packets total\n",
            (long long unsigned int)ip_packet_count,
@@ -400,6 +401,13 @@ static int processing()
 			 printf("err:%d\n",err);
 			 continue;
 		 }
+   unsigned char payload[128];
+   memset(payload, 0x00, sizeof(payload));
+   while(1)
+   {
+     status = ipq_read(h, buf, sizeof(buf),0);
+     if(status==0||status==-1)
+	continue;
 //printf("receive!\n");
      if(status > sizeof(struct nlmsghdr))
      {
@@ -449,6 +457,11 @@ static int processing()
 			 flow->detected_protocol = protocol;
 //			 if(protocol!=0)
 //			 printf("protocol is %d\n",protocol);
+//printf("2\n");
+       ip_packet_count++;
+       total_bytes+=ip_len+24;
+       if(flow->detection_completed) continue;
+       protocol = (const u_int32_t)ndpi_detection_process_packet(ndpi_struct, ndpi_flow,iph,ip_len, time, src, dst);flow->detected_protocol = protocol;
        if((flow->detected_protocol != NDPI_PROTOCOL_UNKNOWN)
            || ((proto == IPPROTO_UDP) && (flow->packets > 8))
            || ((proto == IPPROTO_TCP) && (flow->packets > 10)))
@@ -470,6 +483,22 @@ static int processing()
        }
 	ipq_set_verdict(h, ipq_packet->packet_id, NF_ACCEPT,ipq_packet->data_len,payload + ETH_HDRLEN);
 //  printf("return ACCEPT!\n");
+	printf("packets %d\n",flow->packets);
+         flow->detection_completed = 1;
+         snprintf(flow->host_server_name, sizeof(flow->host_server_name), "%s", flow->ndpi_flow->host_server_name);
+         free_ndpi_flow(flow);
+         char buf1[32], buf2[32];
+//printf("3\n");
+         if(enable_protocol_guess)
+         {
+           if(flow->detected_protocol == 0 /* UNKNOWN */)
+           {
+           //  protocol = node_guess_undetected_protocol(flow);
+           }
+         }
+//可以设置verbose参数，如果满足，就输出流     printFlow(flow);
+       }
+	ipq_set_verdict(h, ipq_packet->packet_id, NF_ACCEPT,ipq_packet->data_len,payload + ETH_HDRLEN);
      }
    }
 }

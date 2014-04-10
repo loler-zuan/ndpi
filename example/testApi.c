@@ -481,11 +481,9 @@ static int processing()
    //      }
 //可以设置verbose参数，如果满足，就输出流     printFlow(flow);
        }
-	ipq_set_verdict(h, ipq_packet->packet_id, NF_ACCEPT,ipq_packet->data_len,payload + ETH_HDRLEN);
+			 ipq_set_verdict(h, ipq_packet->packet_id, NF_ACCEPT,ipq_packet->data_len,payload + ETH_HDRLEN);
 //  printf("return ACCEPT!\n");
-	printf("packets %d\n",flow->packets);
-         flow->detection_completed = 1;
-         snprintf(flow->host_server_name, sizeof(flow->host_server_name), "%s", flow->ndpi_flow->host_server_name);
+       snprintf(flow->host_server_name, sizeof(flow->host_server_name), "%s", flow->ndpi_flow->host_server_name);
          free_ndpi_flow(flow);
          char buf1[32], buf2[32];
 //printf("3\n");

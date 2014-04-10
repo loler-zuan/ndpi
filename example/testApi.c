@@ -32,7 +32,7 @@ static u_int32_t enable_protocol_guess = 1;
 static u_int64_t raw_packet_count = 0;
 static u_int64_t ip_packet_count = 0;
 static u_int64_t total_bytes = 0;
-
+static int counta=0;
 
 typedef struct ndpi_id {
   u_int8_t ip[4];
@@ -136,6 +136,7 @@ static void printResults(u_int64_t tot_usec)
 {
   u_int32_t i;
   int m = 0;                    /* Default output mode: color (0) */
+	printf("count:%d\n",counta);
   if (m) {
     printf("\n");
   } else {
@@ -332,7 +333,7 @@ struct ndpi_flow *get_ndpi_flow(const struct ndpi_iphdr *iph,
       }
 
       //这行有问题
-	ndpi_tsearch(newflow, (void*)&ndpi_flows_root[idx], node_cmp); /* Add */
+	    ndpi_tsearch(newflow, (void*)&ndpi_flows_root[idx], node_cmp); /* Add */
 
       ndpi_flow_count += 1;
 
@@ -386,57 +387,28 @@ static int processing()
    u_int64_t time;
    static u_int64_t lasttime=0;
    unsigned char payload[1024*1024];
-   memset(payload, 0x00, sizeof(payload));
-	int err;
    while(1)
    {
-//		 if(protocol!=0)
-//			 printf("debug1\n");
+     counta++;
+		 printf("1\n");
      status = ipq_read(h, buf, sizeof(buf),0);
-		 int err=ipq_get_msgerr(buf);
-//		 if(protocol!=0)
-//		 	printf("debug2\n");
-     if(status==0||status==-1)
-		 {
-			 printf("err:%d\n",err);
-			 continue;
-		 }
-   unsigned char payload[128];
-   memset(payload, 0x00, sizeof(payload));
-   while(1)
-   {
-     status = ipq_read(h, buf, sizeof(buf),0);
-     if(status==0||status==-1)
-	continue;
-//printf("receive!\n");
+     if(status==0||status==-1)continue;
+     memset(payload, 0x00, sizeof(payload));
      if(status > sizeof(struct nlmsghdr))
      {
-//			 if(protocol!=0)
-//				 printf("debug here\n");
        nlh = (struct nlmsghdr *)buf;//测试是否和ndpi_ethher一致。
        ipq_packet = ipq_get_packet(buf);
-//		 printf("1:between buf and ipq:%d\n",(int)ipq_packet-(int)buf);
        ip_len=ipq_packet->data_len;
-//		 printf("2:between buf and ipq:%d\n",(int)ipq_packet-(int)buf);
        time = ((uint64_t) ipq_packet->timestamp_sec) * detection_tick_resolution +ipq_packet->timestamp_usec / (1000000 / detection_tick_resolution);
-//		 printf("3:between buf and ipq:%d\n",(int)ipq_packet-(int)buf);
-//			 if(ip_len>500)
-//				 printf("here\n");
 			 memcpy(payload + ETH_HDRLEN, ipq_packet->payload, ip_len);
-//		 printf("4:between buf and ipq:%d\n",(int)ipq_packet-(int)buf);
-			 ipq_packet=ipq_get_packet(buf);//by me
-       if(lasttime > time) {
-        // printf("\nWARNING: timestamp bug in the pcap file (ts delta: %llu, repairing)\n", lasttime - time);
+ 			printf("2\n");
+ 			 if(lasttime > time) {
         time = lasttime;
        }
-//printf("1\n");
        lasttime = time;
-//		 printf("5:between buf and ipq:%d\n",(int)ipq_packet-(int)buf);
        iph = (struct ndpi_iphdr *)(&(ipq_packet->payload[0]));//需要测试是否和pcap来的一致
        if(iph)
 			 {
-		//		 if(ip_len>500)
-		//			 printf("de\n");
          flow = get_ndpi_flow(iph, ip_len,&src, &dst, &proto);
 			 }
 			 if(flow != NULL) 
@@ -445,59 +417,38 @@ static int processing()
          flow->packets++, flow->bytes += ip_len;
        } else
          continue;
+			 printf("3\n");
        ip_packet_count++;
        total_bytes+=ip_len+24;
        if(flow->detection_completed) 
 			 {
-//				 printf("have been detected，protocol:%d",flow->detected_protocol);
 				 ipq_set_verdict(h, ipq_packet->packet_id, NF_ACCEPT,ipq_packet->data_len,payload + ETH_HDRLEN);
 				 continue;
 			 }
        protocol = (const u_int32_t)ndpi_detection_process_packet(ndpi_struct, ndpi_flow,iph,ip_len, time, src, dst);
+			 printf("4\n");
 			 flow->detected_protocol = protocol;
-//			 if(protocol!=0)
-//			 printf("protocol is %d\n",protocol);
-//printf("2\n");
-       ip_packet_count++;
-       total_bytes+=ip_len+24;
-       if(flow->detection_completed) continue;
-       protocol = (const u_int32_t)ndpi_detection_process_packet(ndpi_struct, ndpi_flow,iph,ip_len, time, src, dst);flow->detected_protocol = protocol;
        if((flow->detected_protocol != NDPI_PROTOCOL_UNKNOWN)
            || ((proto == IPPROTO_UDP) && (flow->packets > 8))
            || ((proto == IPPROTO_TCP) && (flow->packets > 10)))
        {
-//				 printf("packets %d\n",flow->packets);
          flow->detection_completed = 1;
          snprintf(flow->host_server_name, sizeof(flow->host_server_name), "%s", flow->ndpi_flow->host_server_name);
- //        free_ndpi_flow(flow);
- //        char buf1[32], buf2[32];
-//printf("3\n");
-   //      if(enable_protocol_guess)
-   //      {
-   //        if(flow->detected_protocol == 0 /* UNKNOWN */)
-   //        {
-           //  protocol = node_guess_undetected_protocol(flow);
-   //        }
-   //      }
-//可以设置verbose参数，如果满足，就输出流     printFlow(flow);
-       }
-			 ipq_set_verdict(h, ipq_packet->packet_id, NF_ACCEPT,ipq_packet->data_len,payload + ETH_HDRLEN);
-//  printf("return ACCEPT!\n");
-       snprintf(flow->host_server_name, sizeof(flow->host_server_name), "%s", flow->ndpi_flow->host_server_name);
-         free_ndpi_flow(flow);
+ /*        free_ndpi_flow(flow);
          char buf1[32], buf2[32];
-//printf("3\n");
          if(enable_protocol_guess)
          {
-           if(flow->detected_protocol == 0 /* UNKNOWN */)
+           if(flow->detected_protocol == 0 )
            {
            //  protocol = node_guess_undetected_protocol(flow);
            }
          }
-//可以设置verbose参数，如果满足，就输出流     printFlow(flow);
+可以设置verbose参数，如果满足，就输出流     printFlow(flow);*/
        }
-	ipq_set_verdict(h, ipq_packet->packet_id, NF_ACCEPT,ipq_packet->data_len,payload + ETH_HDRLEN);
-     }
+			 printf("5");
+			 ipq_set_verdict(h, ipq_packet->packet_id, NF_ACCEPT,ipq_packet->data_len,payload + ETH_HDRLEN);
+       snprintf(flow->host_server_name, sizeof(flow->host_server_name), "%s", flow->ndpi_flow->host_server_name);
+	    }
    }
 }
 void test_lib()

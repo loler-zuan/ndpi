@@ -181,8 +181,9 @@ ndpi_tsearch(const void *vkey, void **vrootp,
 
   if(rootp == (ndpi_node **)0)
     return ((void *)0);
-  while (*rootp != (ndpi_node *)0) {	/* Knuth's T1: */
-    int r;
+    while (*rootp != (ndpi_node *)0) {	/* Knuth's T1: */
+   // while((u_int32_t)(*rootp)!=(u_int32_t)((ndpi_node *)0)){
+	  int r;
 
     if((r = (*compar)(key, (*rootp)->key)) == 0)	/* T2: */
       return ((void *)*rootp);		/* we found it! */
@@ -278,8 +279,10 @@ ndpi_tfind(const void *vkey, void *vrootp,
 
   if(rootp == (ndpi_node **)0)
     return ((ndpi_node *)0);
-  while (*rootp != (ndpi_node *)0) {	/* T1: */
-    int r;
+   while (*rootp != (ndpi_node *)0) {	/* T1: */
+//   while((u_int32_t)(*rootp)!=(u_int32_t)((ndpi_node *)0)){
+ 	  int r;
+		printf("%d:%d\n",(u_int32_t)(*rootp),(u_int32_t)((ndpi_node *)0));
     if((r = (*compar)(key, (*rootp)->key)) == 0)	/* T2: */
       return (*rootp);		/* key found */
     rootp = (r < 0) ?

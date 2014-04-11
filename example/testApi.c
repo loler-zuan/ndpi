@@ -21,7 +21,8 @@ struct ipq_handle *h = NULL;
 unsigned char buf[1024*1024];
 static struct ndpi_detection_module_struct *ndpi_struct = NULL;
 static u_int32_t detection_tick_resolution = 1000;
-static u_int32_t ndpi_flows_root[NUM_ROOTS]= { NULL };
+//static u_int32_t ndpi_flows_root[NUM_ROOTS]= { NULL };
+static unsigned long long ndpi_flows_root[NUM_ROOTS]={NULL};
 static u_int32_t ndpi_flow_count= 0 ;
 
 static u_int32_t size_flow_struct = 0;
@@ -32,6 +33,9 @@ static u_int32_t enable_protocol_guess = 1;
 static u_int64_t raw_packet_count = 0;
 static u_int64_t ip_packet_count = 0;
 static u_int64_t total_bytes = 0;
+static u_int64_t protocol_counter_bytes[NDPI_MAX_SUPPORTED_PROTOCOLS +NDPI_MAX_NUM_CUSTOM_PROTOCOLS + 1];
+static u_int32_t protocol_flows[NDPI_MAX_SUPPORTED_PROTOCOLS + NDPI_MAX_NUM_CUSTOM_PROTOCOLS + 1] = { 0 };
+static u_int64_t protocol_counter[NDPI_MAX_SUPPORTED_PROTOCOLS + NDPI_MAX_NUM_CUSTOM_PROTOCOLS + 1];
 static int counta=0;
 
 typedef struct ndpi_id {
@@ -89,6 +93,9 @@ void setupDetection()
   size_id_struct = ndpi_detection_get_sizeof_ndpi_id_struct();
   raw_packet_count = ip_packet_count = total_bytes = 0;
 //printf("out setup\n");
+	memset(protocol_counter, 0, sizeof(protocol_counter));
+	memset(protocol_counter_bytes, 0, sizeof(protocol_counter_bytes));
+	memset(protocol_flows, 0, sizeof(protocol_flows));
 }
 char* formatPackets(float numPkts, char *buf) {
   if(numPkts < 1000) {
@@ -174,7 +181,7 @@ static void printResults(u_int64_t tot_usec)
   }
 
   printf("\n\nDetected protocols:\n");
-/*  for (i = 0; i <= ndpi_get_num_supported_protocols(ndpi_struct); i++) {
+  for (i = 0; i <= ndpi_get_num_supported_protocols(ndpi_struct); i++) {
     if(protocol_counter[i] > 0) {
       if (m) {
         printf("\t\%-20s packets: %-13llu bytes: %-13llu "
@@ -189,7 +196,6 @@ static void printResults(u_int64_t tot_usec)
       }
     }
   }
-*/
 /*  if(verbose && (protocol_counter[0] > 0)) {
     printf("\n");
 
@@ -283,20 +289,22 @@ struct ndpi_flow *get_ndpi_flow(const struct ndpi_iphdr *iph,
     upper_port = 0;
   }
 
+	printf("before access flow\n");
   flow.protocol = iph->protocol;
   flow.lower_ip = lower_ip;
   flow.upper_ip = upper_ip;
   flow.lower_port = lower_port;
   flow.upper_port = upper_port;
-
+	printf("here can access flow\n");
 
   if(0)
     printf("[NDPI] [%u][%u:%u <-> %u:%u]\n",
 	   iph->protocol, lower_ip, ntohs(lower_port), upper_ip, ntohs(upper_port));
 
   idx = (lower_ip + upper_ip + iph->protocol + lower_port + upper_port) % NUM_ROOTS;
-  ret = ndpi_tfind(&flow, (void*)&ndpi_flows_root[idx], node_cmp);
-
+  printf("flow.lower_ip:%d,idx:%d,\n",flow.lower_ip,idx);
+	ret = ndpi_tfind(&flow, (void*)&ndpi_flows_root[idx], node_cmp);
+	printf("here after ndpi_tfind\n");
   if(ret == NULL) {
     if(ndpi_flow_count == MAX_NDPI_FLOWS) {
       printf("ERROR: maximum flow count (%u) has been exceeded\n", MAX_NDPI_FLOWS);
@@ -387,7 +395,8 @@ static int processing()
    u_int64_t time;
    static u_int64_t lasttime=0;
    unsigned char payload[1024*1024];
-   while(counta<40)
+   //counta<40
+	 while(1)
    {
      counta++;
 //		 printf("1\n");
@@ -409,7 +418,9 @@ static int processing()
        iph = (struct ndpi_iphdr *)(&(ipq_packet->payload[0]));//需要测试是否和pcap来的一致
        if(iph)
 			 {
+				 printf("before get_ndpi_flow\n");
          flow = get_ndpi_flow(iph, ip_len,&src, &dst, &proto);
+				 printf("after get_ndpi_flow\n");
 			 }
 			 if(flow != NULL) 
        {
@@ -433,6 +444,9 @@ static int processing()
            || ((proto == IPPROTO_TCP) && (flow->packets > 10)))
        {
          flow->detection_completed = 1;
+				 protocol_counter[flow->detected_protocol]+=flow->packets;
+				 protocol_flows[flow->detected_protocol]++;
+				 protocol_counter_bytes[flow->detected_protocol]+=flow->bytes;
          snprintf(flow->host_server_name, sizeof(flow->host_server_name), "%s", flow->ndpi_flow->host_server_name);
  /*        free_ndpi_flow(flow);
          char buf1[32], buf2[32];
@@ -467,7 +481,8 @@ int main(int argc, const char *argv[])
 {
   int res=fork();
   if(res==0)
-	execlp("iptables","iptables","-I","INPUT","-p","tcp","--sport","80","-j","QUEUE",NULL);
+//	execlp("iptables","iptables","-I","INPUT","-p","tcp","--sport","80","-j","QUEUE",NULL);
+	execlp("iptables","iptables","-I","INPUT","-j","QUEUE",NULL);
   test_lib();
   return 0;
 }

@@ -11,8 +11,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-
+#include <pthread.h>
+#include <curses.h>
 #define MAX_NDPI_FLOWS 2000000
 #define NUM_ROOTS 512
 #define ETH_HDRLEN 14
@@ -139,78 +139,6 @@ char* formatTraffic(float numBits, int bits, char *buf) {
 
   return(buf);
 }
-static void printResults(u_int64_t tot_usec)
-{
-  u_int32_t i;
-  int m = 0;                    /* Default output mode: color (0) */
-	printf("count:%d\n",counta);
-  if (m) {
-    printf("\n");
-  } else {
-    printf("\x1b[2K\n");
-  }
-  printf("pcap file contains\n");
-  if (m) {
-    printf("\tIP packets:   %-13llu of %llu packets total\n",
-           (long long unsigned int)ip_packet_count,
-           (long long unsigned int)raw_packet_count);
-    if(total_bytes > 0)
-      printf("\tIP bytes:     %-13llu (avg pkt size %u bytes)\n",
-             (long long unsigned int)total_bytes,
-             (unsigned int)(total_bytes/raw_packet_count));
-    printf("\tUnique flows: %-13u\n", ndpi_flow_count);
-  } else {
-    printf("\tIP packets:   \x1b[33m%-13llu\x1b[0m of %llu packets total\n",
-           (long long unsigned int)ip_packet_count,
-           (long long unsigned int)raw_packet_count);
-    printf("\tIP bytes:     \x1b[34m%-13llu\x1b[0m (avg pkt size %u bytes)\n",
-           (long long unsigned int)total_bytes,
-           (unsigned int)(total_bytes/ip_packet_count));
-    printf("\tUnique flows: \x1b[36m%-13u\x1b[0m\n", ndpi_flow_count);
-  }
-
-  if(tot_usec > 0) {
-    char buf[32], buf1[32];
-    float t = (float)(ip_packet_count*1000000)/(float)tot_usec;
-    float b = (float)(total_bytes * 8 *1000000)/(float)tot_usec;
-
-    if (m) {
-      printf("\tnDPI throughout: %s pps / %s/sec\n", formatPackets(t, buf), formatTraffic(b, 1, buf1)); } else {
-      //printf("\tGuessed flow protocols: \x1b[35m%-13u\x1b[0m\n", guessed_flow_protocols);
-    }
-  }
-
-  printf("\n\nDetected protocols:\n");
-  for (i = 0; i <= ndpi_get_num_supported_protocols(ndpi_struct); i++) {
-    if(protocol_counter[i] > 0) {
-      if (m) {
-        printf("\t\%-20s packets: %-13llu bytes: %-13llu "
-               "flows: %-13u\n",
-               ndpi_get_proto_name(ndpi_struct, i), (long long unsigned int)protocol_counter[i],
-               (long long unsigned int)protocol_counter_bytes[i], protocol_flows[i]);
-      } else {
-        printf("\t\x1b[31m%-20s\x1b[0m packets: \x1b[33m%-13llu\x1b[0m bytes: \x1b[34m%-13llu\x1b[0m "
-               "flows: \x1b[36m%-13u\x1b[0m\n",
-               ndpi_get_proto_name(ndpi_struct, i), (long long unsigned int)protocol_counter[i],
-               (long long unsigned int)protocol_counter_bytes[i], protocol_flows[i]);
-      }
-    }
-  }
-/*  if(verbose && (protocol_counter[0] > 0)) {
-    printf("\n");
-
-    for(i=0; i<NUM_ROOTS; i++)
-      ndpi_twalk(ndpi_flows_root[i], node_print_known_proto_walker, NULL);
-
-    printf("\n\nUndetected flows:\n");
-    for(i=0; i<NUM_ROOTS; i++)
-      ndpi_twalk(ndpi_flows_root[i], node_print_unknown_proto_walker, NULL);
-  }*/
-
-  printf("\n\n");
-}
-
-
 void sigproc(int sig)
 {
   static int called=0;
@@ -219,7 +147,7 @@ void sigproc(int sig)
   int res=fork();
   if(res==0)
   	execlp("iptables","iptables","-t","filter","--flush",NULL);
-  printResults(0);
+//printResults(0);
   exit(0);
 }
 static void free_ndpi_flow(struct ndpi_flow *flow)
@@ -289,22 +217,22 @@ struct ndpi_flow *get_ndpi_flow(const struct ndpi_iphdr *iph,
     upper_port = 0;
   }
 
-	printf("before access flow\n");
+	//printf("before access flow\n");
   flow.protocol = iph->protocol;
   flow.lower_ip = lower_ip;
   flow.upper_ip = upper_ip;
   flow.lower_port = lower_port;
   flow.upper_port = upper_port;
-	printf("here can access flow\n");
+	//printf("here can access flow\n");
 
   if(0)
     printf("[NDPI] [%u][%u:%u <-> %u:%u]\n",
 	   iph->protocol, lower_ip, ntohs(lower_port), upper_ip, ntohs(upper_port));
 
   idx = (lower_ip + upper_ip + iph->protocol + lower_port + upper_port) % NUM_ROOTS;
-  printf("flow.lower_ip:%d,idx:%d,\n",flow.lower_ip,idx);
+  //printf("flow.lower_ip:%d,idx:%d,\n",flow.lower_ip,idx);
 	ret = ndpi_tfind(&flow, (void*)&ndpi_flows_root[idx], node_cmp);
-	printf("here after ndpi_tfind\n");
+	//printf("here after ndpi_tfind\n");
   if(ret == NULL) {
     if(ndpi_flow_count == MAX_NDPI_FLOWS) {
       printf("ERROR: maximum flow count (%u) has been exceeded\n", MAX_NDPI_FLOWS);
@@ -370,11 +298,11 @@ static int init_netlink()
      printf("%s\n", ipq_errstr());
      return 0;
    }
-   printf("ipq_creat_handle success!\n");
+   //printf("ipq_creat_handle success!\n");
    unsigned char mode = IPQ_COPY_PACKET;
    int range = sizeof(buf);
    int ret = ipq_set_mode(h, mode, range);
-   printf("ipq_set_mode: send bytes =%d, range=%d\n", ret,range);
+   //printf("ipq_set_mode: send bytes =%d, range=%d\n", ret,range);
    signal(SIGINT, sigproc);
 //printf("out netlink\n");
 }
@@ -418,9 +346,9 @@ static int processing()
        iph = (struct ndpi_iphdr *)(&(ipq_packet->payload[0]));//需要测试是否和pcap来的一致
        if(iph)
 			 {
-				 printf("before get_ndpi_flow\n");
+//				 printf("before get_ndpi_flow\n");
          flow = get_ndpi_flow(iph, ip_len,&src, &dst, &proto);
-				 printf("after get_ndpi_flow\n");
+//				 printf("after get_ndpi_flow\n");
 			 }
 			 if(flow != NULL) 
        {
@@ -465,14 +393,183 @@ static int processing()
 	    }
    }
 }
+
+
+
+/*--------------for print------------------------------*/
+#define MAXROW 1000
+#define MAXCOL 500
+static pthread_t printid;
+WINDOW* scrn;
+static u_int64_t protocol_counter[NDPI_MAX_SUPPORTED_PROTOCOLS + NDPI_MAX_NUM_CUSTOM_PROTOCOLS + 1];
+char results[NDPI_MAX_SUPPORTED_PROTOCOLS + NDPI_MAX_NUM_CUSTOM_PROTOCOLS + 10][256];
+int ncmdlines; // cmdoutlines 的行数
+int nwinlines; // xterm 或 equiv. 窗口中 'ps ax' 输出的行数
+int winrow; // 屏幕上当前行的位置
+int cmdstartrow; // 显示的 cmdoutlines 的第一行的索引
+int cmdlastrow; // 显示的 cmdoutlines 的最后一行的索引
+// 在 winrow 上用黑体重写
+static void prepareResults(/*u_int64_t tot_usec*/)
+{
+  u_int32_t i;
+	int row=0;
+  int m = 0;	/* Default output mode: color (0) */
+	memset(results,0,sizeof(results));
+  if (m) {
+    printf("\n");
+  } else {
+    printf("\x1b[2K\n");
+  }
+  if (m) {
+    sprintf(results[row++],"\tIP packets:   %-13llu of %llu packets total\n",
+           (long long unsigned int)ip_packet_count,
+           (long long unsigned int)raw_packet_count);
+    if(total_bytes > 0)
+      sprintf(results[row++],"\tIP bytes:     %-13llu (avg pkt size %u bytes)\n",
+             (long long unsigned int)total_bytes,raw_packet_count>0?0:
+             (unsigned int)(total_bytes/raw_packet_count));
+    sprintf(results[row++],"\tUnique flows: %-13u\n", ndpi_flow_count);
+  } else {
+    sprintf(results[row++],"\tIP packets:   \x1b[33m%-13llu\x1b[0m of %llu packets total\n",
+           (long long unsigned int)ip_packet_count,
+           (long long unsigned int)raw_packet_count);
+    sprintf(results[row++],"\tIP bytes:     \x1b[34m%-13llu\x1b[0m (avg pkt size %u bytes)\n",
+           (long long unsigned int)total_bytes,/*raw_packet_count>0?0:(unsigned int)(total_bytes/ip_packet_count)*/0);
+		sprintf(results[row++],"\tUnique flows: \x1b[36m%-13u\x1b[0m\n", ndpi_flow_count);
+	}
+/*
+  if(tot_usec > 0) {
+    char buf[32], buf1[32];
+    float t = (float)(ip_packet_count*1000000)/(float)tot_usec;
+    float b = (float)(total_bytes * 8 *1000000)/(float)tot_usec;
+
+    if (m) {
+      printf("\tnDPI throughout: %s pps / %s/sec\n", formatPackets(t, buf), formatTraffic(b, 1, buf1)); } else {
+      //printf("\tGuessed flow protocols: \x1b[35m%-13u\x1b[0m\n", guessed_flow_protocols);
+    }
+  }
+*/
+  sprintf(results[row++],"\n\nDetected protocols:\n");
+  for (i = 0; i <= ndpi_get_num_supported_protocols(ndpi_struct) && row < NDPI_MAX_SUPPORTED_PROTOCOLS + NDPI_MAX_NUM_CUSTOM_PROTOCOLS + 10; i++,row++) {
+    if(protocol_counter[i] > 0) {
+      if (m) {
+        sprintf(results[row],"\t\%-20s packets: %-13llu bytes: %-13llu "
+               "flows: %-13u\n",
+               ndpi_get_proto_name(ndpi_struct, i), (long long unsigned int)protocol_counter[i],
+               (long long unsigned int)protocol_counter_bytes[i], protocol_flows[i]);
+      } else {
+        sprintf(results[row],"\t\x1b[31m%-20s\x1b[0m packets: \x1b[33m%-13llu\x1b[0m bytes: \x1b[34m%-13llu\x1b[0m "
+               "flows: \x1b[36m%-13u\x1b[0m\n",
+               ndpi_get_proto_name(ndpi_struct, i), (long long unsigned int)protocol_counter[i],
+               (long long unsigned int)protocol_counter_bytes[i], protocol_flows[i]);
+      }
+    }
+  }
+	ncmdlines = row;
+/*  if(verbose && (protocol_counter[0] > 0)) {
+    printf("\n");
+
+    for(i=0; i<NUM_ROOTS; i++)
+      ndpi_twalk(ndpi_flows_root[i], node_print_known_proto_walker, NULL);
+
+    printf("\n\nUndetected flows:\n");
+    for(i=0; i<NUM_ROOTS; i++)
+      ndpi_twalk(ndpi_flows_root[i], node_print_unknown_proto_walker, NULL);
+  }*/
+}
+static int selected=0;
+
+void changelight(int before)
+{
+	if(before!=-1)
+		mvaddstr(before,0,results[cmdstartrow+before]);
+	int clinenum;
+	attron(A_BOLD);
+	clinenum = cmdstartrow + selected;
+	mvaddstr(selected, 0, results[clinenum]);
+	attroff(A_BOLD);
+	refresh();
+}
+
+static showlastpart()
+{
+	int row;
+	clear();
+	if(ncmdlines<=LINES)
+	{
+		cmdstartrow=0;
+		nwinlines=ncmdlines;
+	}
+	else
+	{
+		cmdstartrow=0;
+		nwinlines=LINES;
+	}
+	cmdlastrow=cmdstartrow+nwinlines-1;
+	for(row=cmdstartrow,winrow=0;row<=cmdlastrow;row++,winrow++)
+	{
+		mvaddstr(winrow,5,results[row]);
+		//mvaddstr(winrow,5,"fffffffffffffffffff");
+	}
+	changelight(-1);
+}
+void reprint()
+{
+	prepareResults();	
+	showlastpart();
+	changelight(-1);
+}
+void sigalarm(int sigio)
+{
+	reprint();
+	alarm(1);
+}
+void updown(int inc)
+{
+	  int tmp = selected + inc;
+		if (tmp >= 0 && tmp < LINES)
+		{
+				selected = tmp;
+				changelight(selected-inc);
+		}
+}
+void *
+printthread(void *arg)
+{
+	char c;
+	scrn=initscr();
+	noecho();
+	cbreak();
+	//mvaddstr(1,0,"hello");
+	prepareResults();
+	showlastpart();
+	signal(SIGALRM,sigalarm);
+	while(1)
+	{
+		//memset(results,0,sizeof(results));
+		c = getch();
+		if (c == 'u')
+			updown(-1);
+		else if (c == 'd')
+			updown(1);
+		else if (c == 'r')
+			reprint();
+	}
+	endwin();
+}
+/*--------------will move to client--------------------*/
 void test_lib()
 {
-setupDetection();
+  setupDetection();
   init_netlink();
+	pthread_create(&printid,NULL,printthread,NULL);
   processing();
+	pthread_join(printid,NULL);
   terminateDetection();
-  printResults(0);
+  //printResults(0);
 }
+
+
 
 
 
@@ -481,8 +578,8 @@ int main(int argc, const char *argv[])
 {
   int res=fork();
   if(res==0)
-//	execlp("iptables","iptables","-I","INPUT","-p","tcp","--sport","80","-j","QUEUE",NULL);
-	execlp("iptables","iptables","-I","INPUT","-j","QUEUE",NULL);
+	execlp("iptables","iptables","-I","INPUT","-p","tcp","--sport","80","-j","QUEUE",NULL);
+//	execlp("iptables","iptables","-I","INPUT","-j","QUEUE",NULL);
   test_lib();
   return 0;
 }

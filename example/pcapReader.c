@@ -607,12 +607,13 @@ static unsigned int packet_processing(const u_int64_t time,
 							    ipsize, time, src, dst);
 
   flow->detected_protocol = protocol;
-
   if((flow->detected_protocol != NDPI_PROTOCOL_UNKNOWN)
      || ((proto == IPPROTO_UDP) && (flow->packets > 8))
      || ((proto == IPPROTO_TCP) && (flow->packets > 10))) {
     flow->detection_completed = 1;
-
+    protocol_counter[flow->detected_protocol]       += flow->packets;
+    protocol_counter_bytes[flow->detected_protocol] += flow->bytes;
+    protocol_flows[flow->detected_protocol]++;
 #if 0
     if(flow->ndpi_flow->l4.tcp.host_server_name[0] != '\0')
       printf("%s\n", flow->ndpi_flow->l4.tcp.host_server_name);
@@ -621,19 +622,18 @@ static unsigned int packet_processing(const u_int64_t time,
     snprintf(flow->host_server_name, sizeof(flow->host_server_name), "%s", flow->ndpi_flow->host_server_name);
     free_ndpi_flow(flow);
 
-    if(verbose > 1) {
+/*    if(verbose > 1) {
       char buf1[32], buf2[32];
 
       if(enable_protocol_guess) {
-        if(flow->detected_protocol == 0 /* UNKNOWN */) {
+        if(flow->detected_protocol == 0 ) {
           protocol = node_guess_undetected_protocol(flow);
         }
       }
 
       printFlow(flow);
-    }
+    }*/
   }
-
 #if 0
   if(ndpi_flow->l4.tcp.host_server_name[0] != '\0')
     printf("%s\n", ndpi_flow->l4.tcp.host_server_name);
@@ -737,17 +737,18 @@ static void printResults(u_int64_t tot_usec)
   for(i=0; i<NUM_ROOTS; i++)
     ndpi_twalk(ndpi_flows_root[i], node_proto_guess_walker, NULL);
 
-  if(enable_protocol_guess) {
+/*  if(enable_protocol_guess) {
     if (m) {
       printf("\tGuessed flow protocols: %-13u\n", guessed_flow_protocols);
     } else {
       printf("\tGuessed flow protocols: \x1b[35m%-13u\x1b[0m\n", guessed_flow_protocols);
     }
   }
-
+*/
   printf("\n\nDetected protocols:\n");
   for (i = 0; i <= ndpi_get_num_supported_protocols(ndpi_struct); i++) {
-    if(protocol_counter[i] > 0) {
+    //printf("%d\n",protocol_counter[i]);
+		if(protocol_counter[i] > 0) {
       if (m) {
         printf("\t\%-20s packets: %-13llu bytes: %-13llu "
 	       "flows: %-13u\n",
@@ -761,7 +762,7 @@ static void printResults(u_int64_t tot_usec)
       }
     }
   }
-
+/*
   if(verbose && (protocol_counter[0] > 0)) {
     printf("\n");
 
@@ -773,7 +774,7 @@ static void printResults(u_int64_t tot_usec)
       ndpi_twalk(ndpi_flows_root[i], node_print_unknown_proto_walker, NULL);
   }
 
-  printf("\n\n");
+  printf("\n\n");*/
 }
 
 static void closePcapFile(void)

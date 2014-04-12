@@ -607,6 +607,18 @@ static unsigned int packet_processing(const u_int64_t time,
 							    ipsize, time, src, dst);
 
   flow->detected_protocol = protocol;
+	/*加入猜测*/
+	if(flow->detected_protocol==NDPI_PROTOCOL_UNKNOWN)
+	{
+  flow->detected_protocol = ndpi_guess_undetected_protocol(ndpi_struct,
+							   flow->protocol,
+							   ntohl(flow->lower_ip),
+							   ntohs(flow->lower_port),
+							   ntohl(flow->upper_ip),
+							   ntohs(flow->upper_port));
+	printf("%d,%d,%d,%d,%d,%d\n",flow->protocol,flow->lower_ip,ntohs(flow->lower_port),flow->upper_ip,flow->upper_port,flow->detected_protocol);
+	}
+	 /*over */
   if((flow->detected_protocol != NDPI_PROTOCOL_UNKNOWN)
      || ((proto == IPPROTO_UDP) && (flow->packets > 8))
      || ((proto == IPPROTO_TCP) && (flow->packets > 10))) {
@@ -734,8 +746,8 @@ static void printResults(u_int64_t tot_usec)
     }
   }
 
-  for(i=0; i<NUM_ROOTS; i++)
-    ndpi_twalk(ndpi_flows_root[i], node_proto_guess_walker, NULL);
+//  for(i=0; i<NUM_ROOTS; i++)
+//    ndpi_twalk(ndpi_flows_root[i], node_proto_guess_walker, NULL);
 
 /*  if(enable_protocol_guess) {
     if (m) {

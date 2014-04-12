@@ -282,7 +282,7 @@ ndpi_tfind(const void *vkey, void *vrootp,
    while (*rootp != (ndpi_node *)0) {	/* T1: */
 //   while((u_int32_t)(*rootp)!=(u_int32_t)((ndpi_node *)0)){
  	  int r;
-		printf("%d:%d\n",(u_int32_t)(*rootp),(u_int32_t)((ndpi_node *)0));
+	//	printf("%d:%d\n",(u_int32_t)(*rootp),(u_int32_t)((ndpi_node *)0));
     if((r = (*compar)(key, (*rootp)->key)) == 0)	/* T2: */
       return (*rootp);		/* key found */
     rootp = (r < 0) ?

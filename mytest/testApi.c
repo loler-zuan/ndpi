@@ -148,7 +148,6 @@ void sigproc(int sig)
   int res=fork();
   if(res==0)
   	execlp("iptables","iptables","-t","filter","--flush",NULL);
-//printResults(0);
 	else
 		endwin();
   exit(0);
@@ -369,46 +368,23 @@ static int processing()
 			 }
        protocol = (const u_int32_t)ndpi_detection_process_packet(ndpi_struct, ndpi_flow,iph,ip_len, time, src, dst);
 //			 printf("4\n");
-			 flow->detected_protocol = protocol;
-			 if( flow->detected_protocol != NDPI_PROTOCOL_UNKNOWN)
-			 {
-				 flow->flag=1;
-			 }
-			 else
-			 {
-				 flow->flag=2;//经过这一步，很多的协议都会被猜出来，所以要用flag标识。
-				 //进行猜测
-				 flow->detected_protocol=ndpi_guess_undetected_protocol(
-						 ndpi_struct,
-						 flow->protocol,
-						 ntohl(flow->lower_ip),
-						 ntohl(flow->lower_port),
-						 ntohl(flow->upper_ip),
-						 ntohl(flow->upper_port));
-				 if(flow->detected_protocol == 92)
-					 exit(0);
-			 }
        if((flow->detected_protocol != NDPI_PROTOCOL_UNKNOWN)
            || ((proto == IPPROTO_UDP) && (flow->packets > 8))
            || ((proto == IPPROTO_TCP) && (flow->packets > 10)))
        {
+         if(flow->detected_protocol==NDPI_PROTOCOL_UNKNOWN)
+				 		flow->detected_protocol = ndpi_guess_undetected_protocol(ndpi_struct,
+							   flow->protocol,
+							   ntohl(flow->lower_ip),
+							   ntohs(flow->lower_port),
+							   ntohl(flow->upper_ip),
+							   ntohs(flow->upper_port));
          flow->detection_completed = 1;
 				 protocol_counter[flow->detected_protocol]+=flow->packets;
 				 protocol_flows[flow->detected_protocol]++;
 				 protocol_counter_bytes[flow->detected_protocol]+=flow->bytes;
          snprintf(flow->host_server_name, sizeof(flow->host_server_name), "%s", flow->ndpi_flow->host_server_name);
- /*        free_ndpi_flow(flow);
-         char buf1[32], buf2[32];
-         if(enable_protocol_guess)
-         {
-           if(flow->detected_protocol == 0 )
-           {
-           //  protocol = node_guess_undetected_protocol(flow);
-           }
-         }
-可以设置verbose参数，如果满足，就输出流     printFlow(flow);*/
        }
-//			 printf("5");
 			 ipq_set_verdict(h, ipq_packet->packet_id, NF_ACCEPT,ipq_packet->data_len,payload + ETH_HDRLEN);
        snprintf(flow->host_server_name, sizeof(flow->host_server_name), "%s", flow->ndpi_flow->host_server_name);
 	    }
@@ -470,8 +446,12 @@ static void prepareResults(/*u_int64_t tot_usec*/)
     }
   }
 */
-  sprintf(results[row++],"\n\nDetected protocols:\n");
-  for (i = 0; i <= ndpi_get_num_supported_protocols(ndpi_struct) && row < NDPI_MAX_SUPPORTED_PROTOCOLS + NDPI_MAX_NUM_CUSTOM_PROTOCOLS + 10; i++,row++) {
+	sprintf(results[row++],"\n");
+	sprintf(results[row++],"\n");
+  sprintf(results[row++],"\tDetected protocols:");
+	sprintf(results[row++],"\n");
+	sprintf(results[row++],"\n");
+  for (i = 0; i <= ndpi_get_num_supported_protocols(ndpi_struct) /*&& row < NDPI_MAX_SUPPORTED_PROTOCOLS + NDPI_MAX_NUM_CUSTOM_PROTOCOLS + 10*/; i++,row++) {
     if(protocol_counter[i] > 0) {
       if (m) {
         sprintf(results[row],"\t\%-20s packets: %-13llu bytes: %-13llu "
@@ -479,6 +459,7 @@ static void prepareResults(/*u_int64_t tot_usec*/)
                ndpi_get_proto_name(ndpi_struct, i), (long long unsigned int)protocol_counter[i],
                (long long unsigned int)protocol_counter_bytes[i], protocol_flows[i]);
       } else {
+				printf("%d\n",row);
         sprintf(results[row],"\t%-20s packets: %-13llu bytes: %-13llu "
                "flows: %-13u\n",
                ndpi_get_proto_name(ndpi_struct, i), (long long unsigned int)protocol_counter[i],
@@ -516,29 +497,25 @@ static showlastpart()
 {
 	int row;
 	clear();
-	if(ncmdlines<=LINES)
-	{
-		cmdstartrow=0;
-		nwinlines=ncmdlines;
-	}
-	else
-	{
-		cmdstartrow=0;
-		nwinlines=LINES;
-	}
+	cmdstartrow=0;
+	nwinlines=ncmdlines;
 	cmdlastrow=cmdstartrow+nwinlines-1;
-	for(row=cmdstartrow,winrow=0;row<=cmdlastrow;row++,winrow++)
+	for(row=cmdstartrow,winrow=0;row<=cmdlastrow;row++)
 	{
-		mvaddstr(winrow,5,results[row]);
-		//mvaddstr(winrow,5,"fffffffffffffffffff");
+		if(results[row][0]!='\0')
+		{
+			mvaddstr(winrow,5,results[row]);
+			winrow++;
+		}
 	}
-	changelight(-1);
+	refresh();
+//	changelight(-1);   因为空行太多，所以略过，那么就不能按照row输出结果，以后再实现。
 }
 void reprint()
 {
 	prepareResults();	
 	showlastpart();
-	changelight(-1);
+//	changelight(-1);
 }
 void sigint(int sigio)
 {
@@ -566,13 +543,13 @@ printthread(void *arg)
 	scrn=initscr();
 	noecho();
 	cbreak();
-	mvaddstr(1,0,"hello");
 	prepareResults();
 	showlastpart();
 	signal(SIGALRM,sigalarm);
 	alarm(1);
 	while(1)
 	{
+		sleep(10000000);//一直循环没有编译优化的时候极大占用CPU
 		//memset(results,0,sizeof(results));
 	//	c = getch();
 	//	if (c == 'u')

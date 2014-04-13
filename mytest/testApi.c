@@ -37,6 +37,35 @@ static u_int64_t protocol_counter_bytes[NDPI_MAX_SUPPORTED_PROTOCOLS +NDPI_MAX_N
 static u_int32_t protocol_flows[NDPI_MAX_SUPPORTED_PROTOCOLS + NDPI_MAX_NUM_CUSTOM_PROTOCOLS + 1] = { 0 };
 static u_int64_t protocol_counter[NDPI_MAX_SUPPORTED_PROTOCOLS + NDPI_MAX_NUM_CUSTOM_PROTOCOLS + 1];
 static int counta=0;
+static int mark_err=0;
+/*-------patch for iptables-devel---------*/
+static ssize_t ipq_netlink_sendto(const struct ipq_handle *h,
+		 const void *msg, size_t len)
+{
+	 int status = sendto(h->fd, msg, len, 0,(struct sockaddr *)&h->peer, sizeof(h->peer));
+	  if (status < 0)
+			mark_err = 16;
+		return status;
+}
+
+int ipq_set_mark(const struct ipq_handle *h,ipq_id_t id,unsigned long mark_value)
+{
+	struct {
+		struct nlmsghdr nlh;
+		ipq_peer_msg_t pm;
+	} req;  
+	memset(&req, 0, sizeof(req));
+	req.nlh.nlmsg_len = NLMSG_LENGTH(sizeof(req));
+	req.nlh.nlmsg_flags = NLM_F_REQUEST;
+	req.nlh.nlmsg_type = IPQM_MARK;
+	req.nlh.nlmsg_pid = h->local.nl_pid;
+	req.pm.msg.mark.id = id;
+	req.pm.msg.mark.mark_value = mark_value;
+	return ipq_netlink_sendto(h, (void *)&req, req.nlh.nlmsg_len);
+}
+/*----------over--------------------------*/
+
+
 
 typedef struct ndpi_id {
   u_int8_t ip[4];
@@ -363,7 +392,8 @@ static int processing()
        total_bytes+=ip_len+24;
        if(flow->detection_completed) 
 			 {
-				 ipq_set_verdict(h, ipq_packet->packet_id, NF_ACCEPT,ipq_packet->data_len,payload + ETH_HDRLEN);
+				 /*ipq_set_verdict(h, ipq_packet->packet_id, NF_ACCEPT,ipq_packet->data_len,payload + ETH_HDRLEN);*/
+				 ipq_set_mark(h,ipq_packet->packet_id,1);
 				 continue;
 			 }
        protocol = (const u_int32_t)ndpi_detection_process_packet(ndpi_struct, ndpi_flow,iph,ip_len, time, src, dst);
@@ -583,7 +613,10 @@ int main(int argc, const char *argv[])
   int res=fork();
   if(res==0)
 //	execlp("iptables","iptables","-I","INPUT","-p","tcp","--sport","80","-j","QUEUE",NULL);
-	execlp("iptables","iptables","-I","INPUT","-j","QUEUE",NULL);
-  test_lib();
+		execlp("iptables","iptables","-I","INPUT","-j","QUEUE",NULL);
+  res=fork();
+	if(res==0)
+		execlp("iptables","iptables","-I","OUTPUT","-j","QUEUE",NULL);
+	test_lib();
   return 0;
 }

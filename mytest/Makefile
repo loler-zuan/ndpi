@@ -1,8 +1,9 @@
 INC=-I../src/include/
 LIB=../src/lib/.libs/libndpi.a  /lib64/libipq.so
 FLAGS=-g #-fno-color-diagnostics
-pcapReader: testApi.c Makefile ../src/lib/.libs/libndpi.a
-	gcc $(FLAGS) $(INC) testApi.c -o pcapReader $(LIB) -lpthread -lcurses
-
+server: Server.c Makefile ../src/lib/.libs/libndpi.a
+	gcc $(FLAGS) $(INC) Server.c -o server $(LIB) -lpthread
+client: Client.c 
+	gcc $(FLAGS) $(INC) Client.c -o client $(LIB) -lpthread -lcurses
 clean:
-	\/bin/rm -f pcapReader
+	\/bin/rm -f client server

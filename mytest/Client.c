@@ -13,7 +13,7 @@
 #define MAXROW 1000
 #define MAXCOL 500
 static pthread_t printid;
-static int serversock;
+static int serversock=0;
 static int flag=1;
 WINDOW* scrn;
 char results[NDPI_MAX_SUPPORTED_PROTOCOLS + NDPI_MAX_NUM_CUSTOM_PROTOCOLS + 10][256];
@@ -22,18 +22,8 @@ int nwinlines; // xterm 或 equiv. 窗口中 'ps ax' 输出的行数
 int winrow; // 屏幕上当前行的位置
 int cmdstartrow; // 显示的 cmdoutlines 的第一行的索引
 int cmdlastrow; // 显示的 cmdoutlines 的最后一行的索引
+struct sockaddr_un un;
 // 在 winrow 上用黑体重写
-/*void changelight(int before)
-{
-	if(before!=-1)
-		mvaddstr(before,0,results[cmdstartrow+before]);
-	int clinenum;
-	attron(A_BOLD);
-	clinenum = cmdstartrow + selected;
-	mvaddstr(selected, 0, results[clinenum]);
-	attroff(A_BOLD);
-	refresh();
-}*/
 int reciveResults(int flag)
 {
 //	int row;
@@ -77,7 +67,6 @@ int initChannel(char *servername)
 		printf("can not create socket\n");
 		return(-1);
 	}  
-	struct sockaddr_un un;            
 	memset(&un, 0, sizeof(un));
 	un.sun_family = AF_UNIX;
 	sprintf(un.sun_path, "scktmp%05d", getpid());
@@ -133,7 +122,15 @@ void reprint()
 }
 void sigint(int sigio)
 {
+	char buf[20];
+	memset(buf,0,sizeof(buf));
+	sprintf(buf, "scktmp%05d", getpid());
+	int flag=10;
+	if(serversock!=0)
+		send(serversock,&flag,sizeof(flag),0);
+	close(serversock);
 	endwin();
+	unlink(buf);
 	exit(0);
 }
 void sigalarm(int sigio)
@@ -171,6 +168,8 @@ printthread(void *arg)
 int verbose=1;
 int main(int argc,const char *argv[])
 {
+	signal(SIGINT,sigint);
+	signal(SIGPIPE,SIG_IGN);
 	if(verbose==1)
 	{
 		pthread_create(&printid,NULL,printthread,NULL);

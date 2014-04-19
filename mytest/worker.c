@@ -1,4 +1,4 @@
-#include "shttpd.h"
+#include "worker.h"
 
 //可以使用宏定义 -D来控制是否打印标记信息。标记信息一般用于debug阶段，print想要的结构
 
@@ -11,10 +11,10 @@ void Worker_Init();
 void Worker_Add(int i);
 void Worker_Delete(int i);
 void Worker_Destory();
-void do_worker(struct worker_area *workerarea)
+void do_worker(int sock)
 {
-	int sock=workerarea->away;
-	fd_set fds;
+	dealRequest(sock);
+	/*fd_set fds;
 	struct timeval timeout;
 	int res=1;
 	int nbytes=0;
@@ -37,7 +37,6 @@ void do_worker(struct worker_area *workerarea)
 						nbytes=read(sock,workerarea->req,sizeof(workerarea->req));
 						if(nbytes==0)
 						{
-							//链接已关闭
 							return;
 						}
 						workerarea->req_len=nbytes;
@@ -47,17 +46,15 @@ void do_worker(struct worker_area *workerarea)
 						printf("%s",workerarea->req);
 					}
 		}
-	}
-	printf("analysis data....\n");
+	}*/
 }
 void *worker(void *arg)
 {
 	struct worker *worker=(struct worker*)arg;
-	struct worker_ctl *ctl=&(worker->ctl);
 	pthread_mutex_unlock(&protectWorkers);
-	for(;ctl->flags!=WORKER_DETACHING;)
+	for(;worker->flags!=WORKER_DETACHING;)
 	{
-		int res=pthread_mutex_trylock(&(ctl->mutex));
+		int res=pthread_mutex_trylock(&(worker->mutex));
 		if(res!=0)
 		{
 			//之前已经阻塞
@@ -67,31 +64,30 @@ void *worker(void *arg)
 		else
 		{
 			printf("WORKER_RUNNING\n");
-			ctl->flags=WORKER_RUNNING;
-			do_worker(&(worker->area));		
-			close(worker->area.away);
-			if(ctl->flags==WORKER_DETACHING)
+			worker->flags=WORKER_RUNNING;
+			do_worker(worker->sock);		
+			if(worker->flags==WORKER_DETACHING)
 				break;
 			else
 			{
-				ctl->flags=WORKER_IDEL;
+				worker->flags=WORKER_IDEL;
 			}
 		}
 	}
-	ctl->flags=WORKER_DETACHED;
+	worker->flags=WORKER_DETACHED;
 	count--;
 }
 void Worker_Add(int i)
 {
 	int res=-1;
 	int err=0;
-	if(workers[i].ctl.flags==WORKER_RUNNING)
+	if(workers[i].flags==WORKER_RUNNING)
 		return;
 	else
 	{
 		pthread_mutex_lock(&protectWorkers);//保证在worker[i]传递给线程之前只被这个线程修改。
-		workers[i].ctl.flags=WORKER_IDEL;
-		err=pthread_create(&(workers[i].ctl.pid),NULL,worker,(void *)&workers[i]);
+		workers[i].flags=WORKER_IDEL;
+		err=pthread_create(&(workers[i].pid),NULL,worker,(void *)&workers[i]);
 		count++;
 		return;
 	}
@@ -99,20 +95,15 @@ void Worker_Add(int i)
 void Worker_Init()
 {
 	int i=0;
-	workers=(struct worker*)malloc(sizeof(struct worker)*conf.maxClient);
-	memset(workers,0,sizeof(struct worker)*conf.maxClient);
-	for(i=0;i<conf.maxClient;i++)	
+	workers=(struct worker*)malloc(sizeof(struct worker)*10);
+	memset(workers,0,sizeof(struct worker)*10);
+	for(i=0;i<10;i++)	
 	{
-		pthread_mutex_init(&workers[i].ctl.mutex,NULL);
-		pthread_mutex_lock(&workers[i].ctl.mutex);
-		workers[i].ctl.flags=WORKER_INITED;//当前工作者状态
-		workers[i].area.away=-1;
-		workers[i].area.local=-1;
-		memset(workers[i].area.req,0,sizeof(workers[i].area.req));
-		memset(workers[i].area.res,0,sizeof(workers[i].area.res));
-		//这里的初始化未完成，因为结构体没有完成，先完成线程调度部分
+		pthread_mutex_init(&workers[i].mutex,NULL);
+		pthread_mutex_lock(&workers[i].mutex);
+		workers[i].flags=WORKER_INITED;//当前工作者状态
 	}
-	for(i=0;i<conf.initClient;i++)
+	for(i=0;i<5;i++)
 	{
 		Worker_Add(i);
 	}
@@ -123,22 +114,22 @@ int findStatus(int status)
 	int i=0;
 	for(i=0;i<count;i++)
 	{
-		if(workers[i].ctl.flags == status)
+		if(workers[i].flags == status)
 			return i;
 	}
 	return -1;
 }
 
-void Worker_ScheduleRun(int sock)
+void Worker_ScheduleRun(void *str)
 {
-	struct sockaddr_in client;
-	int len=sizeof(client);
-	int res=-1;
-	static int wait=0;
-	int clientSock;
+	int sock=do_listen(str);
+	int client_sock;
 	Worker_Init();
-
+  int res=-1;
+	static int wait=0;
 	struct timeval tv;
+	struct sockaddr_un client_un;
+	int client_len;
 	fd_set fds;
 	while(1)
 	{
@@ -157,15 +148,16 @@ void Worker_ScheduleRun(int sock)
 					{
 						if(wait==0)
 						{
-							clientSock=accept(sock,(struct sockaddr *)&client,&len);//一次accept处理一次数据，但是如果一个sock同时有多个请求，缓冲区就还有没有处理的请求数据。select会返回>0
-							printf("client coming\n");
+							client_sock=accept(sock,(struct sockaddr*)&client_un,&client_len);//一次accept处理一次数据，但是如果一个sock同时有多个请求，缓冲区就还有没有处理的请求数据。select会返回>0
+						 	client_len -= offsetof(struct sockaddr_un,sun_path);
+							client_un.sun_path[client_len]=0;
 						}
 						//查找空闲线程，如果没有新建，保证有空闲线程后，赋值clientSock，并解锁。
 						int idel=findStatus(WORKER_IDEL);
 						if(idel==-1)
 						{
 							//printf("cant find idel thread\n");
-							if(count<conf.maxClient)
+							if(count<10)
 							{
 							//	printf("add new thread\n");
 								Worker_Add(count);
@@ -180,8 +172,8 @@ void Worker_ScheduleRun(int sock)
 						if(idel!=-1)
 						{
 							//printf("will work\n");
-							workers[idel].area.away=clientSock;
-							pthread_mutex_unlock(&(workers[idel].ctl.mutex));
+							workers[idel].sock=client_sock;
+							pthread_mutex_unlock(&(workers[idel].mutex));
 							wait=0;
 						}
 					}

@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include "detection.h"
 #include "communicate.h"
+#include "worker.h"
 void sigproc(int sig)
 {
   static int called=0;
@@ -21,7 +22,7 @@ void sigproc(int sig)
 }
 void terminateDetection()
 {
-
+	sigproc(0);
 }
 void deamon()
 {
@@ -37,7 +38,7 @@ void prepareDetection()
 void run()
 {
 	prepareDetection();
-	pthread_create(&recieve_quest_id,NULL,(void *)newChannel,(void *)path);
+	pthread_create(&recieve_quest_id,NULL,(void *)Worker_ScheduleRun,(void *)path);
 	doingDetection();
 	pthread_join(recieve_quest_id,NULL);
   terminateDetection();
@@ -45,6 +46,8 @@ void run()
 int main(int argc, const char *argv[])
 {
 	deamon();
+	signal(SIGPIPE,SIG_IGN);
+	signal(SIGINT,sigproc);
   int res=fork();
   if(res==0)
 		execlp("iptables","iptables","-I","INPUT","-j","QUEUE",NULL);

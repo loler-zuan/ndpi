@@ -1,16 +1,15 @@
-
 #include "communicate.h"
 /*--if client request the info prepare for it------*/
 extern int ncmdlines;
 extern char results[NDPI_MAX_SUPPORTED_PROTOCOLS + NDPI_MAX_NUM_CUSTOM_PROTOCOLS + 10][256];
-int sock;
 int client_len;
 struct sockaddr_un client_un;
 int client_sock;
-
+pthread_rwlock_t protectResults=PTHREAD_RWLOCK_INITIALIZER;
 void prepareResults()
 {
 	  u_int32_t i;
+		pthread_rwlock_wrlock(&protectResults);
 		int row=0;
 		memset(results,0,sizeof(results));
 		sprintf(results[row++],"\tIP packets:   %-13llu of %llu packets total\n",(long long unsigned int)ip_packet_count,(long long unsigned int)raw_packet_count);
@@ -30,10 +29,11 @@ void prepareResults()
 			}
 	}
   ncmdlines = row;
+	pthread_rwlock_unlock(&protectResults);
 }
 int sendResults(int sock)
 {
-	int row;
+		pthread_rwlock_rdlock(&protectResults);
 	  if(send(sock,&ncmdlines,sizeof(ncmdlines),0)<0)
 			{
 				perror("send ncmdlines error\n");
@@ -44,6 +44,7 @@ int sendResults(int sock)
 			printf("send results error\n");
 			return -1;
 		}
+		pthread_rwlock_unlock(&protectResults);
 		return 0;
 }
 int dealRequest(int sock)
@@ -59,17 +60,20 @@ int dealRequest(int sock)
 				prepareResults();
 				sendResults(sock);
 				break;
+			case 10:
+				close(sock);
 			default:
 				return 0;
 		}
 	}
 }
 
-int newChannel(void *str)
+
+int do_listen(void *str)
 {
 	  int size;
 		struct sockaddr_un un;
-		int clientsock;
+		int sock,clientsock;
 		if(str==NULL)
 		{
 			printf("have not set socket path\n");
@@ -95,10 +99,5 @@ int newChannel(void *str)
 			printf("unix socket listen failed\n");
 			return 0;
 		}
-		client_sock=accept(sock,(struct sockaddr*)&client_un,&client_len);//这里由于时间紧，暂时设置成这样。其实应该是多线程，通过锁实现多个client共同访问。
-		client_len -= offsetof(struct sockaddr_un,sun_path);
-		client_un.sun_path[client_len]=0;
-		dealRequest(client_sock);
+		return sock;
 }
-
-

@@ -279,6 +279,9 @@ int doingDetection()
        if(flow->detection_completed) 
 			 {
 
+				 protocol_counter[flow->detected_protocol]+=flow->packets;
+				 protocol_flows[flow->detected_protocol]++;
+				 protocol_counter_bytes[flow->detected_protocol]+=flow->bytes;
 			//	 ipq_set_mark(h,ipq_packet->packet_id,1);
 			   markAndRoute(h,ipq_packet->packet_id,flow->detected_protocol);
 				 continue;
@@ -320,7 +323,7 @@ void markAndRoute(struct ipq_handle *h,ipq_id_t id,int protocol)
 						*((rules+i)->protocols)+j
 						)==0)
 			{
-				printf("%d",i+1);
+				//printf("%d",i+1);
 				ipq_set_mark(h,id,i+1);
 				return;
 			}

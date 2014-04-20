@@ -19,6 +19,9 @@ void sigproc(int sig)
   int res=fork();
   if(res==0)
   	execlp("iptables","iptables","-t","filter","--flush",NULL);
+	res=fork();
+	if(res==0)
+		execlp("iptables","iptables","-t","mangle","--flush",NULL);
 	unlink(conf.sockPath);
   exit(0);
 }
@@ -51,7 +54,8 @@ int main(int argc, const char *argv[])
 	signal(SIGINT,sigproc);
   int res=fork();
   if(res==0)
-		execlp("iptables","iptables","-I","INPUT","-j","QUEUE",NULL);
+		execlp("iptables","iptables","-t","mangle","-I","PREROUTING","-j","QUEUE",NULL);
+	res=fork();
 	if(res==0)
 		execlp("iptables","iptables","-I","OUTPUT","-j","QUEUE",NULL);
 	run();

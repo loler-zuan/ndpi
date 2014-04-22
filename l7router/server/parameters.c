@@ -33,7 +33,7 @@ void version()
 	printf("l7-router-server 1.0 by Lingzhi.Li\n");
 	exit(0);
 }
-void Cmd_Analyse(int argc,char *argv[])
+void Cmd_Analyse(int argc, const char * argv[])
 {
 	char *ops="i:m:g:l:hv";
 	int c;
@@ -149,7 +149,7 @@ void File_Analyse()
 	close(fd);
 }
 
-void Para_Init(int argc,char *argv[])
+void Para_Init(int argc,const char *argv[])
 {
 	Cmd_Analyse(argc,argv);
 	File_Analyse();

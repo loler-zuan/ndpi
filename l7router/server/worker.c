@@ -180,3 +180,12 @@ void Worker_ScheduleRun(void *str)
 	}
 	return;
 }
+void freeWorker()
+{
+	int i;
+	for(i=0;i<conf.maxClient;i++)
+	{
+		free(workers+i);
+	}
+	workers=NULL;
+}

@@ -22,7 +22,7 @@ struct conf_options
 	int maxClient;
 	int initClient;
 };
-void Para_Init(int,char *[]);
+void Para_Init(int,const char *[]);
 extern struct conf_options conf;
 extern struct rule *rules;
 #endif

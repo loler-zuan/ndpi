@@ -10,7 +10,7 @@
 #include "worker.h"
 #include "parameters.h"
 pthread_t deal_request_id;
-
+void terminateDetection();
 void sigproc(int sig)
 {
   static int called=0;
@@ -22,12 +22,15 @@ void sigproc(int sig)
 	res=fork();
 	if(res==0)
 		execlp("iptables","iptables","-t","mangle","--flush",NULL);
+	terminateDetection();
 	unlink(conf.sockPath);
   exit(0);
 }
 void terminateDetection()
 {
-	sigproc(0);
+	int i,j;
+	freeDetection();
+	freeWorker();
 }
 void deamon()
 {

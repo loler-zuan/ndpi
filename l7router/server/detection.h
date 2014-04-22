@@ -33,6 +33,7 @@ typedef struct ndpi_flow {
 
   void *src_id, *dst_id;
 	int flag;//判断是不是guess出来的。
+	int mark;
 } ndpi_flow_t;
 
 
@@ -46,4 +47,5 @@ extern struct ndpi_detection_module_struct *ndpi_struct;
 extern u_int32_t ndpi_flow_count;
 extern int init_netlink();
 extern int doingDetection();
+extern void freeDetection();
 #endif

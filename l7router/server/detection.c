@@ -19,7 +19,7 @@ static u_int32_t size_flow_struct = 0;
 static u_int32_t size_id_struct = 0;
 static u_int32_t enable_protocol_guess = 1;
 unsigned char buf[1024*1024];
-void markAndRoute(struct ipq_handle *h,ipq_id_t id,int protocol);
+int markAndRoute(struct ipq_handle *h,ipq_id_t id,int protocol);
 
 
 static int node_cmp(const void *a, const void *b)
@@ -276,21 +276,26 @@ int doingDetection()
 //			 printf("3\n");
        ip_packet_count++;
        total_bytes+=ip_len+24;
+			 if(flow->detected_protocol==81)
+			 {
+				 printf("icmp\n");
+			 }
        if(flow->detection_completed) 
 			 {
 
 				 protocol_counter[flow->detected_protocol]+=flow->packets;
 				 protocol_flows[flow->detected_protocol]++;
 				 protocol_counter_bytes[flow->detected_protocol]+=flow->bytes;
-			//	 ipq_set_mark(h,ipq_packet->packet_id,1);
-			   markAndRoute(h,ipq_packet->packet_id,flow->detected_protocol);
+				 ipq_set_mark(h,ipq_packet->packet_id,flow->mark);
+			//	 printf("soon\n");
+			//   markAndRoute(h,ipq_packet->packet_id,flow->detected_protocol);
 				 continue;
 			 }
        protocol = (const u_int32_t)ndpi_detection_process_packet(ndpi_struct, ndpi_flow,(char *)iph,ip_len, time, src, dst);
 //			 printf("4\n");
        if((flow->detected_protocol != NDPI_PROTOCOL_UNKNOWN)
-           || ((proto == IPPROTO_UDP) && (flow->packets > 8))
-           || ((proto == IPPROTO_TCP) && (flow->packets > 10)))
+           || ((proto == IPPROTO_UDP) && (flow->packets > 3))
+           || ((proto == IPPROTO_TCP) && (flow->packets > 5)))
        {
          if(flow->detected_protocol==NDPI_PROTOCOL_UNKNOWN)
 				 		flow->detected_protocol = ndpi_guess_undetected_protocol(ndpi_struct,
@@ -306,13 +311,14 @@ int doingDetection()
          snprintf(flow->host_server_name, sizeof(flow->host_server_name), "%s", flow->ndpi_flow->host_server_name);
        }
 			 //ipq_set_mark(h,ipq_packet->packet_id,1);
-			 markAndRoute(h,ipq_packet->packet_id,flow->detected_protocol);
+			 flow->mark=markAndRoute(h,ipq_packet->packet_id,flow->detected_protocol);
+			// printf("slow\n");
        snprintf(flow->host_server_name, sizeof(flow->host_server_name), "%s", flow->ndpi_flow->host_server_name);
 	    }
    }
 }
 
-void markAndRoute(struct ipq_handle *h,ipq_id_t id,int protocol)
+int markAndRoute(struct ipq_handle *h,ipq_id_t id,int protocol)
 {
 	int i,j;
 	for(i=0;i<rulesNumber;i++)
@@ -323,10 +329,33 @@ void markAndRoute(struct ipq_handle *h,ipq_id_t id,int protocol)
 						*((rules+i)->protocols)+j
 						)==0)
 			{
-				//printf("%d",i+1);
 				ipq_set_mark(h,id,i+1);
-				return;
+				return i+1;
 			}
 	}
 	ipq_set_mark(h,id,0); 
+}
+static void ndpi_flow_freer(void *node) {
+	  struct ndpi_flow *flow = (struct ndpi_flow*)node;
+		  free_ndpi_flow(flow);
+			  ndpi_free(flow);
+}
+void freeDetection()
+{
+	int i,j;
+	for(i=0;i<NUM_ROOTS;i++)
+	{
+		ndpi_tdestroy(ndpi_flows_root[i], ndpi_flow_freer);
+		ndpi_flows_root[i] = NULL;
+	}
+	for(i=0;i<rulesNumber;i++)
+	{
+		for(j=0;j<(rules+i)->number;j++)
+		{
+			free(*((rules+i)->protocols)+j);
+		}
+		free(rules+i);
+	}
+	rules=NULL;
+	ndpi_exit_detection_module(ndpi_struct, free_wrapper);
 }
